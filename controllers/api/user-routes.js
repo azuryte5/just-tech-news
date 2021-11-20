@@ -14,6 +14,13 @@ router.get('/', (req, res) => {
 });
 
 router.get('/:id', (req, res) => {
+  if(!req.session.views){
+    req.session.views = 1
+    console.log("This is your first visit!")
+  } else {
+    req.session.views++
+    console.log(`You have visited ${req.session.views} times`);
+  }
   User.findOne({
     attributes: { exclude: ['password'] },
     where: {
@@ -60,7 +67,18 @@ router.post('/', (req, res) => {
     email: req.body.email,
     password: req.body.password
   })
-    .then(dbUserData => res.json(dbUserData))
+    // This was expanded in 14.2.5 after sessions included
+    // .then(dbUserData => res.json(dbUserData))
+    .then(dbUserData => {
+      // Something about callback function is deliberate so save happens after
+      req.session.save(() => {
+        req.session.user_id = dbUserData.id;
+        req.session.username = dbUserData.username;
+        req.session.loggedIn = true;
+    
+        res.json(dbUserData);
+      });
+    })
     .catch(err => {
       console.log(err);
       res.status(500).json(err);
@@ -85,9 +103,27 @@ router.post('/login', (req, res) => {
       res.status(400).json({ message: 'Incorrect password!' });
       return;
     }
+    // Added session information during 14.2.5
+    req.session.save(() => {
+      // declare session variables, adding attributes to session stats
+      req.session.user_id = dbUserData.id;
+      req.session.username = dbUserData.username;
+      req.session.loggedIn = true;
 
     res.json({ user: dbUserData, message: 'You are now logged in!' });
   });
+});
+});
+
+router.post('/logout', (req, res) => {
+  if (req.session.loggedIn) {
+    req.session.destroy(() => {
+      res.status(204).end();
+    });
+  }
+  else {
+    res.status(404).end();
+  }
 });
 
 router.put('/:id', (req, res) => {
